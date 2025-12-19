@@ -8,8 +8,8 @@ def parse_hacker_news():
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-        print("Получение данных")
-        response = requests.get(url, headers=headers)
+        print("Получение данных...")
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         title_rows = soup.find_all('span', class_='titleline')
@@ -23,15 +23,19 @@ def parse_hacker_news():
                 comments = 0
                 if i < len(subtext_rows):
                     subtext = subtext_rows[i]
-                    comment_link = subtext.find_all('a')[-1]
-                    if 'comment' in comment_link.text:
-                        comment_text = comment_link.text.strip()
-                        if comment_text != 'discuss':
-                            try:
-                                comments_text = comment_text.split()[0]
-                                comments = int(comments_text) if comments_text.isdigit() else 0
-                            except:
-                                comments = 0
+                    comment_links = subtext.find_all('a')
+                    if comment_links:
+                        comment_link = comment_links[-1]
+                        if 'comment' in comment_link.text.lower():
+                            comment_text = comment_link.text.strip()
+                            if comment_text.lower() != 'discuss':
+                                try:
+                                    comment_parts = comment_text.split()
+                                    if comment_parts:
+                                        comments_text = comment_parts[0]
+                                        comments = int(comments_text) if comments_text.isdigit() else 0
+                                except:
+                                    comments = 0
                 points = 0
                 if i < len(subtext_rows):
                     subtext = subtext_rows[i]
@@ -52,37 +56,58 @@ def parse_hacker_news():
                 }
                 news_list.append(news_item)
         return news_list
+    except requests.exceptions.RequestException as e:
+        print(f"Ошибка при получении данных: {e}")
         return []
-def save_to_json(data, filename='data.json'): 
+    except Exception as e:
+        print(f"Неожиданная ошибка: {e}")
+        return []
+def save_to_json(data, filename='data.json'):
     try:
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         print(f"Данные сохранены в файл: {filename}")
-        return 
+        return True
+    except Exception as e:
+        print(f"Ошибка при сохранении в файл: {e}")
+        return False
 def display_news(news_list):
-    print("\n" + " ")
-    print("Новости:")
-    print(" ")
+    print("\n" + "=" * 60)
+    print("НОВОСТИ HACKER NEWS")
+    print("=" * 60)
+    if not news_list:
+        print("Нет данных для отображения")
+        return
     for item in news_list:
-        print(f"{item['id']}. Title: {item['title']}; Comments: {item['comments']};")
+        print(f"{item['id']:3}. {item['title'][:60]}...")
+        print(f"     Комментарии: {item['comments']:4} | Очки: {item['points']:4} | Ссылка: {item['link'][:50]}...")
+        print("-" * 60)
 def main():
-    print("Запуск парсера")
-    print("-" * 40)
+    print("=" * 60)
+    print("ЗАПУСК ПАРСЕРА HACKER NEWS")
+    print("=" * 60)
     news_data = parse_hacker_news()
     if news_data:
         display_news(news_data)
-        save_to_json(news_data)
-        print("\n" + "-" * 40)
-        print(f"Всего новостей: {len(news_data)}")
-        print(f"Всего комментариев: {sum(item['comments'] for item in news_data)}")
-        print(f"Сохранено")
-        print("\n" + " " * 40)
-        print("Пример данных:")
-        try:
-            with open('data.json', 'r', encoding='utf-8') as f:
-                sample_data = json.load(f)
-                if sample_data:
-                    print(f"Первая новость: {sample_data[0]['title'][:50]}...")
-
+        if save_to_json(news_data):
+            print("\n" + "-" * 60)
+            print("СТАТИСТИКА:")
+            print(f"Всего новостей: {len(news_data)}")
+            print(f"Всего комментариев: {sum(item['comments'] for item in news_data)}")
+            print(f"Всего очков: {sum(item['points'] for item in news_data)}")
+            print("\n" + "-" * 60)
+            print("ПРИМЕР ДАННЫХ ИЗ ФАЙЛА:")
+            try:
+                with open('data.json', 'r', encoding='utf-8') as f:
+                    sample_data = json.load(f)
+                    if sample_data:
+                        first_item = sample_data[0]
+                        print(f"Первая новость: {first_item['title']}")
+                        print(f"Комментарии: {first_item['comments']}, Очки: {first_item['points']}")
+                        print(f"Ссылка: {first_item['link']}")
+            except Exception as e:
+                print(f"Ошибка при чтении файла: {e}")
+    else:
+        print("Не удалось получить данные с Hacker News")
 if __name__ == "__main__":
     main()
